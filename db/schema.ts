@@ -1,46 +1,10 @@
-// import { pgTable, serial, text, timestamp,  boolean, foreignKey} from 'drizzle-orm/pg-core';
-
-
-// export const logosTable = pgTable('logos_table', {
-//   id: serial('id').primaryKey(),
-//   image_url: text('link').notNull(),
-//   primary_color: text('primary_color').notNull(),
-//   background_color: text('background_color').notNull(),
-//   username: text('username').notNull(),
-//   userId: text('user_id').notNull(),
-//   createdAt: timestamp('created_at').notNull().defaultNow(),
-  
-// });
-
-// // 1. 点赞表（记录用户对 logo 的点赞）
-// export const likesTable = pgTable("likes", {
-//   id: text("id").primaryKey(), // 唯一 ID
-//   logoId: text("logo_id")
-//     .notNull()
-//     .references(() => logosTable.id, { onDelete: "cascade" }), // 关联 logo
-//   userId: text("user_id").notNull(), // 点赞用户（Clerk 用户 ID）
-//   createdAt: timestamp("created_at").notNull().defaultNow(),
-// });
-
-// // 2. 收藏表（记录用户收藏的 logo）
-// export const favoritesTable = pgTable("favorites", {
-//   id: text("id").primaryKey(),
-//   logoId: text("logo_id")
-//     .notNull()
-//     .references(() => logosTable.id, { onDelete: "cascade" }),
-//   userId: text("user_id").notNull(), // 收藏用户
-//   createdAt: timestamp("created_at").notNull().defaultNow(),
-// });
-
-// export type InsertLogo = typeof logosTable.$inferInsert;
-// export type SelectLogo = typeof logosTable.$inferSelect;
 
 import { pgTable, serial, text, timestamp, integer, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const logosTable = pgTable('logos_table', {
   id: serial('id').primaryKey(),
-  image_url: text('link').notNull(),
+  image_url: text("image_url").notNull(),
   primary_color: text('primary_color').notNull(),
   background_color: text('background_color').notNull(),
   username: text('username').notNull(),
