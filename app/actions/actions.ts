@@ -2,11 +2,12 @@
 
 import { z } from 'zod';
 import { clerkClient, currentUser } from "@clerk/nextjs/server";
-import { InsertLogo, logosTable, likesTable, userProfilesTable, creditTransactionsTable } from '@/db/schema';
+import { InsertLogo, logosTable, likesTable, userProfilesTable, creditTransactionsTable, bookmarksTable } from '@/db/schema';
 import { db } from '@/db';
 import { eq, desc, and, count } from 'drizzle-orm';
 import { rateLimit } from '@/lib/upstash';
 import sharp from 'sharp';
+
 
 // 表单验证 schema
 const FormSchema = z.object({
@@ -368,6 +369,11 @@ export async function checkHistory() {
     const userLogos = await db
       .select({
         id: logosTable.id,
+        clerkUserId: logosTable.clerkUserId || '',
+        model: logosTable.model || null,
+        promptText: logosTable.promptText || null,
+        isPublic: logosTable.isPublic || false,
+        isFeatured: logosTable.isFeatured || false,
         companyName: logosTable.companyName,
         style: logosTable.style,
         primary_color: logosTable.primary_color,
@@ -449,11 +455,10 @@ export async function downloadImage(url: string) {
   }
 }
 
-// 修复 toggleLike 函数
 export async function toggleLike(logoId: number) {
   const user = await currentUser();
   if (!user) {
-    return { success: false, error: "Please log in first" };
+    return { success: false, error: "请先登录" }; // 改为中文
   }
 
   try {
@@ -475,23 +480,24 @@ export async function toggleLike(logoId: number) {
       const count = await getLikeCount(logoId);
       return { success: true, isLiked: false, count };
     } else {
-      // 修复：添加 clerkUserId 字段
       await db
         .insert(likesTable)
         .values({
           logoId,
           userId: user.id,
-          clerkUserId: user.id, // 新增的必需字段
+          clerkUserId: user.id,
         });
       const count = await getLikeCount(logoId);
       return { success: true, isLiked: true, count };
     }
   } catch (error) {
     console.error("Like operation failed:", error);
-    return { success: false, error: "Operation failed" };
+    return { success: false, error: "操作失败" };
   }
 }
 
+
+//获取喜欢数量
 export async function getLikeCount(logoId: number) {
   try {
     const result = await db
@@ -501,11 +507,11 @@ export async function getLikeCount(logoId: number) {
 
     return result[0]?.count || 0;
   } catch (error) {
-    console.error("Error getting like count:", error);
+    console.error("获取喜爱数量失败:", error);
     return 0;
   }
 }
-
+//查看个人喜欢
 export async function checkUserLiked(logoId: number): Promise<boolean> {
   const user = await currentUser();
   if (!user) return false;
@@ -521,7 +527,110 @@ export async function checkUserLiked(logoId: number): Promise<boolean> {
 
     return existingLike.length > 0;
   } catch (error) {
-    console.error("Error checking like status:", error);
+    console.error("检查喜爱状态失败:", error);
     return false;
+  }
+}
+
+
+// 切换收藏状态
+export async function toggleBookmark(logoId: number) {
+  const user = await currentUser();
+  if (!user) {
+    return { success: false, error: "请先登录" };
+  }
+
+  try {
+    const existingBookmark = await db
+      .select()
+      .from(bookmarksTable)
+      .where(and(
+        eq(bookmarksTable.logoId, logoId),
+        eq(bookmarksTable.userId, user.id)
+      ));
+
+    if (existingBookmark.length > 0) {
+      // 取消收藏
+      await db
+        .delete(bookmarksTable)
+        .where(and(
+          eq(bookmarksTable.logoId, logoId),
+          eq(bookmarksTable.userId, user.id)
+        ));
+      const bookmarkCount = await getBookmarkCount(logoId);
+      return { success: true, isBookmarked: false, count: bookmarkCount };
+    } else {
+      // 添加收藏
+      await db
+        .insert(bookmarksTable)
+        .values({
+          logoId,
+          userId: user.id,
+          clerkUserId: user.id,
+        });
+      const bookmarkCount = await getBookmarkCount(logoId);
+      return { success: true, isBookmarked: true, count: bookmarkCount };
+    }
+  } catch (error) {
+    console.error("收藏操作失败:", error);
+    return { success: false, error: "操作失败" };
+  }
+}
+
+// 获取收藏数量
+export async function getBookmarkCount(logoId: number) {
+  try {
+    const result = await db
+      .select({ count: count() })
+      .from(bookmarksTable)
+      .where(eq(bookmarksTable.logoId, logoId));
+
+    return result[0]?.count || 0;
+  } catch (error) {
+    console.error("获取收藏数量失败:", error);
+    return 0;
+  }
+}
+
+// 检查用户是否收藏
+export async function checkUserBookmarked(logoId: number): Promise<boolean> {
+  const user = await currentUser();
+  if (!user) return false;
+
+  try {
+    const existingBookmark = await db
+      .select()
+      .from(bookmarksTable)
+      .where(and(
+        eq(bookmarksTable.logoId, logoId),
+        eq(bookmarksTable.userId, user.id)
+      ));
+
+    return existingBookmark.length > 0;
+  } catch (error) {
+    console.error("检查收藏状态失败:", error);
+    return false;
+  }
+}
+
+// 获取用户收藏列表
+export async function getUserBookmarks() {
+  const user = await currentUser();
+  if (!user) return [];
+
+  try {
+    const bookmarkedLogos = await db
+      .select({
+        logo: logosTable,
+      })
+      .from(bookmarksTable)
+      .innerJoin(logosTable, eq(bookmarksTable.logoId, logosTable.id))
+      .where(eq(bookmarksTable.userId, user.id))
+      .orderBy(desc(bookmarksTable.createdAt));
+
+    return bookmarkedLogos.map(item => item.logo);
+  } catch (error) {
+    console.error("获取收藏列表失败:", error);
+    return [];
   }
 }
