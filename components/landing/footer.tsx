@@ -6,10 +6,12 @@ import {
   IconBrandInstagram,
   IconBrandFacebook,
   IconRocket,
-  IconBrandGithub,
-  IconBrandLinkedin,
-  IconBrandX,
   IconSparkles,
+  IconBrandGithub, 
+  IconBrandLinkedin, 
+  IconBrandX,
+  IconMail,
+  IconWorld 
 } from "@tabler/icons-react";
 import GridLinesBg from "../grid-lines-bg";
 import FooterGradient from "../ui/footer-gradient";
@@ -19,6 +21,8 @@ import { SignInButton } from "@clerk/nextjs";
 import { SignedOut } from "@clerk/nextjs";
 import { domain } from "@/lib/domain";
 import Link from "next/link";
+
+
 
 export default function Footer() {
   return (
@@ -75,29 +79,37 @@ export default function Footer() {
               <div className="text-sm md:text-base">
                 &copy; {new Date().getFullYear()} LogoAI
               </div>
-              <div className="flex gap-4 items-center justify-center">
-                <Link 
-                  href="https://git.new/Arindam" 
-                  target="_blank" 
-                  className="hover:text-primary transition-colors"
-                >
-                  <IconBrandGithub className="size-5 md:size-8" />
-                </Link>
-                <Link 
-                  href="https://dub.sh/arindam-linkedin" 
-                  target="_blank"
-                  className="hover:text-primary transition-colors"
-                >
-                  <IconBrandLinkedin className="size-5 md:size-8" />
-                </Link>
-                <Link 
-                  href="https://dub.sh/arindam-x" 
-                  target="_blank"
-                  className="hover:text-primary transition-colors"
-                >
-                  <IconBrandX className="size-5 md:size-8" />
-                </Link>
-              </div>
+              <div className="flex items-center gap-4">
+
+              <Link 
+                href="mailto:SYR-Soong@outlook.com" 
+                className="hover:text-primary transition-colors"
+                title="发送邮件"
+              >
+                <IconMail className="size-5 md:size-6" />
+              </Link>
+              
+
+              <Link 
+                href="https://github.com/Soong-A" 
+                target="_blank" 
+                className="hover:text-primary transition-colors"
+                title="GitHub"
+              >
+                <IconBrandGithub className="size-5 md:size-6" />
+              </Link>
+
+              <Link 
+                href="https://soong-a.github.io/" 
+                target="_blank"
+                className="hover:text-primary transition-colors"
+                title="个人网站"
+              >
+                <IconWorld className="size-5 md:size-6" />
+              </Link>
+              
+
+            </div>
             </div>
           </div>
         </div>
