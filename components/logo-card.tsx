@@ -118,7 +118,7 @@ const LogoCard = ({ logo, onDownload }: LogoCardProps) => {
             description: result.error || "请稍后重试",
             variant: "destructive",
           });
-        }
+        } 
       }
     } catch (error) {
       // 捕获任何未预期的错误
