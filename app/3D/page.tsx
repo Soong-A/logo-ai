@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { 
   ArrowLeft, Download, Box, HelpCircle, AlertCircle, 
   CheckCircle, RefreshCw, Image as ImageIcon, ChevronDown,
-  Upload, Mouse
+  Upload, Mouse,Settings, X, Maximize2, Minimize2,
+  RotateCcw, ZoomIn, ZoomOut, Move3D, Palette, Trash2
 } from "lucide-react";
 import Link from "next/link";
 import Navbar from "@/components/landing/navbar";
@@ -673,11 +674,11 @@ const SceneContent = ({
         enableZoom={true}
       />
       
-      {/* 简单地面 */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]}>
+     {/* 浅色地面 - 与背景渐变协调 */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
         <planeGeometry args={[10, 10]} />
-        <meshStandardMaterial color="#4b5563" />
-      </mesh>
+        <shadowMaterial transparent opacity={0.3} />
+    </mesh>
       
       <Suspense fallback={
         <group>
@@ -752,22 +753,33 @@ const ModelScene = ({
         className="h-full w-full"
       >
         <Canvas 
-          camera={{ 
-            position: [3, 3, 3], 
-            fov: 50,
-            near: 0.1,
-            far: 1000
-          }}
-          style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%)' }}
-        >
-          <SceneContent 
-            model={model} 
-            appliedTextures={appliedTextures}
-            selectedTextureId={selectedTextureId}
-            onTextureSelect={onTextureSelect}
-            onDoubleClick={onDoubleClick}
-          />
-        </Canvas>
+                 camera={{ 
+                   position: [3, 3, 3], 
+                   fov: 50,
+                   near: 0.1,
+                   far: 1000
+                 }}
+                 style={{ 
+                   background: `
+                     linear-gradient(to bottom, #f8f7ff 0%, #f0edff 25%, #ffffff 60%),
+                     radial-gradient(circle at 20% 20%, rgba(168, 139, 245, 0.08) 0%, transparent 50%)
+                   `
+                 }}
+               >
+                 <Suspense fallback={
+                   <div className="w-full h-full flex items-center justify-center">
+                     <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+                   </div>
+                 }>
+                   <SceneContent 
+                     model={model} 
+                     appliedTextures={appliedTextures}
+                     selectedTextureId={selectedTextureId}
+                     onTextureSelect={onTextureSelect}
+                     onDoubleClick={onDoubleClick}
+                   />
+                 </Suspense>
+               </Canvas>
       </div>
     </ErrorBoundary>
   );
@@ -856,23 +868,660 @@ const HistoryImageCard = ({
 };
 
 // 主页面组件
+const ControlPanel = ({ 
+  isOpen, 
+  onClose,
+  selectedModelId,
+  onModelChange,
+  currentModel,
+  selectedImageUrl,
+  onDeselectImage
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedModelId: string;
+  onModelChange: (id: string) => void;
+  currentModel: ModelConfig | undefined;
+  selectedImageUrl: string | null;
+  onDeselectImage: () => void;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute top-24 left-4 w-80 bg-background/95 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-2xl z-20 max-h-[60vh] overflow-y-auto">
+      <div className="p-4 border-b border-gray-200/50 flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
+          <Settings className="h-5 w-5 text-blue-600" />
+          控制面板
+        </h3>
+        <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0 hover:bg-gray-100">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      <CardContent className="p-4 space-y-4">
+        {/* 模型选择器 */}
+        <div>
+          <label className="text-sm font-medium mb-2 block text-gray-700">选择模型</label>
+          <Select 
+            value={selectedModelId} 
+            onValueChange={onModelChange}
+          >
+            <SelectTrigger className="w-full bg-white border-gray-300">
+              <SelectValue placeholder="选择3D模型" />
+            </SelectTrigger>
+            <SelectContent>
+              {MODEL_CONFIG.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* 鼠标控制说明 */}
+        <MouseControlsInfo />
+        
+        {/* 模型信息 */}
+        {currentModel && (
+          <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-200/50">
+            <h4 className="font-medium text-sm mb-2 text-gray-700">模型信息</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              {currentModel.description}
+            </p>
+            {currentModel.path && (
+              <div className="text-xs text-gray-500">
+                <p>路径: {currentModel.path}</p>
+                <StatusIndicator currentModel={currentModel} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 选中状态提示 */}
+        {selectedImageUrl && (
+          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <h4 className="font-medium text-sm mb-2 flex items-center gap-2 text-amber-800">
+              <ImageIcon className="h-4 w-4 text-amber-600" />
+              已选择图片
+            </h4>
+            <div className="flex items-center gap-2 mb-2">
+              <img 
+                src={selectedImageUrl} 
+                alt="已选择图片"
+                className="w-8 h-8 object-cover rounded-lg border border-amber-300"
+              />
+              <span className="text-sm text-amber-700 flex-1">双击模型表面放置</span>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={onDeselectImage}
+            >
+              取消选择
+            </Button>
+          </div>
+        )}
+
+        {/* 操作说明 */}
+        <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200/50">
+          <h4 className="font-medium text-sm mb-2 flex items-center gap-2 text-gray-800">
+            <HelpCircle className="h-4 w-4 text-blue-600" />
+            操作指南
+          </h4>
+          <ul className="text-xs text-gray-600 space-y-1">
+            <li className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              鼠标左键拖拽旋转视图
+            </li>
+            <li className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              鼠标滚轮缩放
+            </li>
+            <li className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              选择图片后双击模型表面放置新贴图
+            </li>
+            <li className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              点击已放置的贴图选中它
+            </li>
+            <li className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              选中贴图后双击模型表面移动贴图
+            </li>
+          </ul>
+        </div>
+      </CardContent>
+    </div>
+  );
+};
+
+// 历史图片面板组件 - 修改位置避免与状态栏重叠
+const HistoryPanel = ({
+  isOpen,
+  onClose,
+  historyImages,
+  loadedImages,
+  onImageSelect,
+  selectedImageUrl,
+  onDeselectImage,
+  isLoadingHistory
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  historyImages: SelectLogo[];
+  loadedImages: {[key: number]: string};
+  onImageSelect: (url: string) => void;
+  selectedImageUrl: string | null;
+  onDeselectImage: () => void;
+  isLoadingHistory: boolean;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-[90vw] max-w-4xl bg-background/95 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-2xl z-20">
+      <div className="p-4 border-b border-gray-200/50 flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
+          <ImageIcon className="h-5 w-5 text-purple-600" />
+          历史图片
+        </h3>
+        <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0 hover:bg-gray-100">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      
+      <div className="p-4">
+        {isLoadingHistory ? (
+          <div className="flex justify-center items-center py-8">
+            <RefreshCw className="h-6 w-6 animate-spin text-purple-600 mr-2" />
+            <p className="text-sm text-gray-600">加载历史图片中...</p>
+          </div>
+        ) : historyImages.length > 0 ? (
+          <>
+            {/* 横向滚动的图片列表 */}
+            <div 
+              className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 scrollbar-track-transparent"
+              style={{ 
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#d1d5db transparent'
+              }}
+            >
+              {historyImages.map((image) => (
+                <HistoryImageCard 
+                  key={image.id} 
+                  image={image} 
+                  onSelect={onImageSelect}
+                  imageData={loadedImages[image.id]}
+                />
+              ))}
+            </div>
+            
+            {/* 选中的图片提示 */}
+            {selectedImageUrl && (
+              <div className="mt-4 pt-4 border-t border-gray-200/50">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                    <CheckCircle className="h-3 w-3 text-green-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-800">已选择图片</span>
+                </div>
+                <div className="mt-2 flex items-center gap-3">
+                  <img 
+                    src={selectedImageUrl} 
+                    alt="Selected" 
+                    className="w-12 h-12 object-cover rounded-lg border border-green-300"
+                  />
+                  <p className="text-sm text-gray-600 flex-1">
+                    双击模型表面放置（自动贴合曲面）
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                    onClick={onDeselectImage}
+                  >
+                    取消选择
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+            <p>暂无历史图片</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+// 贴图管理面板组件
+const TextureManagerPanel = ({
+  isOpen,
+  onClose,
+  appliedTextures,
+  selectedTextureId,
+  onTextureSelect,
+  onRemoveTexture,
+  onClearTextures
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  appliedTextures: any[];
+  selectedTextureId: string | null;
+  onTextureSelect: (id: string) => void;
+  onRemoveTexture: (id: string) => void;
+  onClearTextures: () => void;
+}) => {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  
+  // 默认位置 - 在工具栏下方
+  const defaultPosition = { x: 0, y: 180 };
+
+  // 初始化位置
+  useEffect(() => {
+    if (isOpen) {
+      setPosition(defaultPosition);
+    }
+  }, [isOpen]);
+
+  // 处理鼠标按下事件
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // 只处理左键
+    
+    setIsDragging(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+    
+    e.preventDefault();
+  };
+
+  // 处理鼠标移动事件
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    setPosition({
+      x: e.clientX - dragOffset.x,
+      y: e.clientY - dragOffset.y
+    });
+  }, [isDragging, dragOffset]);
+
+  // 处理鼠标抬起事件
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // 添加全局鼠标事件监听
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div 
+      className="fixed w-80 bg-background/95 backdrop-blur-sm border border-gray-200/50 rounded-2xl shadow-2xl z-20 max-h-[70vh] overflow-y-auto select-none"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'default'
+      }}
+    >
+      {/* 标题栏 - 可拖拽区域 */}
+      <div 
+        className="p-4 border-b border-gray-200/50 flex items-center justify-between cursor-move bg-gradient-to-r from-green-50 to-emerald-50/50"
+        onMouseDown={handleMouseDown}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      >
+        <div className="flex items-center gap-2">
+          <Palette className="h-5 w-5 text-green-600" />
+          <h3 className="text-lg font-semibold text-gray-800">
+            贴图管理 ({appliedTextures.length})
+          </h3>
+          {/* {isDragging && (
+            <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+              拖拽中...S
+            </span>
+          )} */}
+        </div>
+        <div className="flex items-center gap-1">
+          {/* 重置位置按钮 */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setPosition(defaultPosition)}
+            className="h-8 w-8 p-0 hover:bg-green-100"
+            title="重置位置"
+          >
+            <RefreshCw className="h-3 w-3" />
+          </Button>
+          {/* 关闭按钮 */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onClose} 
+            className="h-8 w-8 p-0 hover:bg-gray-100"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      
+      <div className="p-4">
+        {appliedTextures.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <Palette className="h-12 w-12 mx-auto mb-2 opacity-50" />
+            <p>暂无贴图</p>
+            <p className="text-sm mt-1">从历史图片中选择并添加到模型</p>
+          </div>
+        ) : (
+          <>
+            {/* 贴图列表 */}
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {appliedTextures.map((texture, index) => (
+                <div 
+                  key={texture.id} 
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                    selectedTextureId === texture.id 
+                      ? 'bg-blue-50 border-blue-300 shadow-sm' 
+                      : 'bg-white border-gray-200 hover:bg-gray-50 hover:shadow-sm'
+                  }`}
+                  onClick={() => onTextureSelect(texture.id)}
+                >
+                  {/* 贴图缩略图 */}
+                  <div className="flex-shrink-0 relative">
+                    <img 
+                      src={texture.url} 
+                      alt={`贴图 ${index + 1}`}
+                      className="w-12 h-12 object-cover rounded-lg border border-gray-300"
+                    />
+                    {selectedTextureId === texture.id && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                        <CheckCircle className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 贴图信息 */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      贴图 {index + 1}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {selectedTextureId === texture.id ? "已选中 - 双击模型移动" : "点击选中"}
+                    </p>
+                  </div>
+                  
+                  {/* 删除按钮 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveTexture(texture.id);
+                    }}
+                    title="删除贴图"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            
+            {/* 操作按钮 */}
+            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50"
+                onClick={onClearTextures}
+                disabled={appliedTextures.length === 0}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                清除全部 ({appliedTextures.length})
+              </Button>
+            </div>
+            
+            {/* 操作提示 */}
+            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs text-blue-700">
+                <strong>提示：</strong>选中贴图后，双击模型表面可以移动贴图位置
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// 工具栏组件
+const Toolbar = ({
+  onToggleControlPanel,
+  onToggleHistoryPanel,
+  onToggleTextureManager,
+  onDownloadModel,
+  isDownloading,
+  currentModel,
+  appliedTextures,
+  selectedTextureId,
+  onDeselectTexture,
+  selectedImageUrl,
+  onDeselectImage,
+  onClearTextures
+}: {
+  onToggleControlPanel: () => void;
+  onToggleHistoryPanel: () => void;
+  onToggleTextureManager: () => void;
+  onDownloadModel: () => void;
+  isDownloading: boolean;
+  currentModel: ModelConfig | undefined;
+  appliedTextures: any[];
+  selectedTextureId: string | null;
+  onDeselectTexture: () => void;
+  selectedImageUrl: string | null;
+  onDeselectImage: () => void;
+  onClearTextures: () => void;
+}) => {
+  return (
+    <div className="absolute top-20 right-4 flex flex-col gap-3 z-20">
+      {/* 主工具栏 */}
+      <div className="flex flex-col gap-2 bg-white/90 backdrop-blur-sm border border-gray-200/50 rounded-xl p-2 shadow-2xl">
+        {/* 控制面板按钮 */}
+        <Button
+          onClick={onToggleControlPanel}
+          variant="ghost"
+          size="sm"
+          className="gap-2 h-10 w-10 p-0 justify-center hover:bg-blue-50 hover:text-blue-600 transition-all"
+          title="控制面板"
+        >
+          <Settings className="h-5 w-5" />
+        </Button>
+
+        {/* 历史图片按钮 */}
+        <Button
+          onClick={onToggleHistoryPanel}
+          variant="ghost"
+          size="sm"
+          className="gap-2 h-10 w-10 p-0 justify-center hover:bg-purple-50 hover:text-purple-600 transition-all"
+          title="历史图片"
+        >
+          <ImageIcon className="h-5 w-5" />
+        </Button>
+
+        {/* 贴图管理按钮 */}
+        <Button
+          onClick={onToggleTextureManager}
+          variant="ghost"
+          size="sm"
+          className="gap-2 h-10 w-10 p-0 justify-center hover:bg-green-50 hover:text-green-600 transition-all relative"
+          title="贴图管理"
+        >
+          <Palette className="h-5 w-5" />
+          {appliedTextures.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+              {appliedTextures.length}
+            </span>
+          )}
+        </Button>
+
+        {/* 下载模型按钮 */}
+        {currentModel?.path && (
+          <Button 
+            onClick={onDownloadModel} 
+            disabled={isDownloading}
+            variant="ghost"
+            size="sm"
+            className="gap-2 h-10 w-10 p-0 justify-center hover:bg-green-50 hover:text-green-600 transition-all"
+            title="下载模型"
+          >
+            <Download className="h-5 w-5" />
+          </Button>
+        )}
+      </div>
+
+      {/* 快速操作按钮组 */}
+      {(selectedTextureId || selectedImageUrl || appliedTextures.length > 0) && (
+        <div className="bg-white/90 backdrop-blur-sm border border-gray-200/50 rounded-xl p-2 shadow-2xl">
+          <div className="flex flex-col gap-1">
+            {selectedTextureId && (
+              <Button 
+                onClick={onDeselectTexture}
+                variant="ghost"
+                size="sm"
+                className="gap-2 justify-start h-8 text-xs text-blue-700 hover:bg-blue-50"
+              >
+                <Move3D className="h-3 w-3" />
+                取消选中贴图
+              </Button>
+            )}
+            
+            {selectedImageUrl && (
+              <Button 
+                onClick={onDeselectImage}
+                variant="ghost"
+                size="sm"
+                className="gap-2 justify-start h-8 text-xs text-amber-700 hover:bg-amber-50"
+              >
+                <ImageIcon className="h-3 w-3" />
+                取消选择图片
+              </Button>
+            )}
+            
+            {appliedTextures.length > 0 && (
+              <Button 
+                onClick={onClearTextures}
+                variant="ghost"
+                size="sm"
+                className="gap-2 justify-start h-8 text-xs text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-3 w-3" />
+                清除贴图 ({appliedTextures.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// 状态指示器组件 - 固定在底部
+const StatusBar = ({
+  selectedModelId,
+  appliedTextures,
+  selectedTextureId,
+  selectedImageUrl
+}: {
+  selectedModelId: string;
+  appliedTextures: any[];
+  selectedTextureId: string | null;
+  selectedImageUrl: string | null;
+}) => {
+  const currentModel = MODEL_CONFIG.find(m => m.id === selectedModelId);
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-200/50 p-3 z-10">
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
+            <Box className="h-4 w-4 text-blue-600" />
+            <span className="font-medium text-blue-700">{currentModel?.name}</span>
+          </div>
+          
+          {selectedImageUrl && (
+            <div className="flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-300">
+              <ImageIcon className="h-3 w-3" />
+              <span className="font-medium">已选择图片 - 双击模型表面放置</span>
+            </div>
+          )}
+          
+          {selectedTextureId && (
+            <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1.5 rounded-lg border border-blue-300">
+              <Move3D className="h-3 w-3" />
+              <span className="font-medium">已选中贴图 - 双击模型表面移动</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-4 text-xs text-gray-600">
+          <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+            <Palette className="h-3 w-3" />
+            <span>贴图数量: {appliedTextures.length}</span>
+          </div>
+          <div className="hidden md:flex items-center gap-1 bg-gradient-to-r from-blue-100 to-purple-100 px-2 py-1 rounded border border-blue-200">
+            <span className="font-medium">✨ 增强厚度智能曲面贴图</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 主页面组件
 export default function ThreeDViewerPage() {
   const [selectedModelId, setSelectedModelId] = useState<string>("test-cube");
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [historyImages, setHistoryImages] = useState<SelectLogo[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(true);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
-  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [appliedTextures, setAppliedTextures] = useState<Array<{
     id: string;
     url: string;
     position: [number, number, number];
     normal: [number, number, number];
-    modelMesh?: THREE.Mesh | null;
+    modelMesh?: any;
   }>>([]);
   const [selectedTextureId, setSelectedTextureId] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<{[key: number]: string}>({});
   const [textureSize, setTextureSize] = useState<number>(0.25);
+  
+  // 面板状态 - 移除互斥逻辑
+  const [isControlPanelOpen, setIsControlPanelOpen] = useState<boolean>(false);
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
+  const [isTextureManagerOpen, setIsTextureManagerOpen] = useState<boolean>(false);
+  
   const { toast } = useToast();
 
   const currentModel: ModelConfig | undefined = MODEL_CONFIG.find(m => m.id === selectedModelId);
@@ -940,14 +1589,14 @@ export default function ThreeDViewerPage() {
 
   // 当历史面板展开时加载可见图片
   useEffect(() => {
-    if (isHistoryOpen && historyImages.length > 0) {
+    if (isHistoryPanelOpen && historyImages.length > 0) {
       // 只加载前6张图片（首屏可见）
       const imagesToLoad = historyImages.slice(0, 6);
       imagesToLoad.forEach(image => {
         loadImageData(image.id);
       });
     }
-  }, [isHistoryOpen, historyImages]);
+  }, [isHistoryPanelOpen, historyImages]);
 
   const handleDownloadModel = () => {
     if (!currentModel?.path) return;
@@ -972,10 +1621,11 @@ export default function ThreeDViewerPage() {
     }
   };
 
-  // 处理历史图片选择
+  // 处理历史图片选择 - 移除自动关闭历史面板的逻辑
   const handleImageSelect = (url: string) => {
     setSelectedImageUrl(url);
     setSelectedTextureId(null); // 取消选中的贴图
+    // 不再自动关闭历史面板
     toast({
       title: "已选择图片",
       description: "双击模型表面放置图片",
@@ -1000,7 +1650,7 @@ export default function ThreeDViewerPage() {
   const handleModelDoubleClick = (
     position: [number, number, number], 
     normal: [number, number, number], 
-    modelMesh: THREE.Mesh | null
+    modelMesh: any
   ) => {
     // 使用 ref 的当前值来避免闭包问题
     const currentSelectedTextureId = selectedTextureIdRef.current;
@@ -1086,447 +1736,160 @@ export default function ThreeDViewerPage() {
     });
   };
 
-  // 切换历史面板展开状态
-  const toggleHistoryPanel = () => {
-    setIsHistoryOpen(!isHistoryOpen);
+  // 切换控制面板 - 移除互斥逻辑
+  const toggleControlPanel = () => {
+    setIsControlPanelOpen(!isControlPanelOpen);
   };
 
-  return (
-    <div className="min-h-screen bg-background overflow-hidden">
+  // 切换历史面板 - 移除互斥逻辑
+  const toggleHistoryPanel = () => {
+    setIsHistoryPanelOpen(!isHistoryPanelOpen);
+  };
+
+  // 切换贴图管理面板 - 移除互斥逻辑
+  const toggleTextureManager = () => {
+    setIsTextureManagerOpen(!isTextureManagerOpen);
+  };
+
+return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 overflow-hidden">
       <Navbar />
       
-      <div className="max-w-7xl mx-auto mt-16 px-4 sm:px-6 lg:px-8 py-8">
-        {/* 导航栏 */}
-        <div className="mb-6 flex flex-wrap gap-4 items-center justify-between">
+      {/* 主内容区域 - 全屏3D画布 */}
+      <div className="relative w-full h-[calc(100vh-4rem)]">
+        {/* 3D场景 */}
+        <div className="absolute inset-0 rounded-none">
+          {currentModel ? (
+            <ModelScene 
+              model={currentModel} 
+              appliedTextures={appliedTextures}
+              selectedTextureId={selectedTextureId}
+              onTextureSelect={handleTextureSelect}
+              onDoubleClick={handleModelDoubleClick}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-red-500 bg-white/80 backdrop-blur-sm">
+              未找到模型配置
+            </div>
+          )}
+        </div>
+
+        {/* 工具栏 */}
+        <Toolbar
+          onToggleControlPanel={toggleControlPanel}
+          onToggleHistoryPanel={toggleHistoryPanel}
+          onToggleTextureManager={toggleTextureManager}
+          onDownloadModel={handleDownloadModel}
+          isDownloading={isDownloading}
+          currentModel={currentModel}
+          appliedTextures={appliedTextures}
+          selectedTextureId={selectedTextureId}
+          onDeselectTexture={handleDeselectTexture}
+          selectedImageUrl={selectedImageUrl}
+          onDeselectImage={handleDeselectImage}
+          onClearTextures={handleClearTextures}
+        />
+
+        {/* 控制面板 - 在左侧 */}
+        <ControlPanel
+          isOpen={isControlPanelOpen}
+          onClose={() => setIsControlPanelOpen(false)}
+          selectedModelId={selectedModelId}
+          onModelChange={setSelectedModelId}
+          currentModel={currentModel}
+          selectedImageUrl={selectedImageUrl}
+          onDeselectImage={handleDeselectImage}
+        />
+
+        {/* 历史图片面板 */}
+        <HistoryPanel
+          isOpen={isHistoryPanelOpen}
+          onClose={() => setIsHistoryPanelOpen(false)}
+          historyImages={historyImages}
+          loadedImages={loadedImages}
+          onImageSelect={handleImageSelect}
+          selectedImageUrl={selectedImageUrl}
+          onDeselectImage={handleDeselectImage}
+          isLoadingHistory={isLoadingHistory}
+        />
+
+        {/* 贴图管理面板 - 在工具栏正下方 */}
+        <TextureManagerPanel
+          isOpen={isTextureManagerOpen}
+          onClose={() => setIsTextureManagerOpen(false)}
+          appliedTextures={appliedTextures}
+          selectedTextureId={selectedTextureId}
+          onTextureSelect={handleTextureSelect}
+          onRemoveTexture={handleRemoveTexture}
+          onClearTextures={handleClearTextures}
+        />
+
+        {/* 状态栏 - 固定在底部 */}
+        <StatusBar
+          selectedModelId={selectedModelId}
+          appliedTextures={appliedTextures}
+          selectedTextureId={selectedTextureId}
+          selectedImageUrl={selectedImageUrl}
+        />
+
+        {/* 操作提示覆盖层 */}
+        {selectedImageUrl && !selectedTextureId && (
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-100/20 to-orange-100/10 border-4 border-dashed border-amber-400/30 flex items-center justify-center z-10 pointer-events-none">
+            <div className="text-center bg-white/90 backdrop-blur-sm p-6 rounded-2xl shadow-2xl border border-amber-200">
+              <ImageIcon className="h-12 w-12 text-amber-600 mx-auto mb-3" />
+              <p className="font-semibold text-lg mb-1 text-amber-800">双击模型表面放置图片</p>
+              <p className="text-sm text-amber-600">贴图将自动贴合曲面</p>
+            </div>
+          </div>
+        )}
+        
+        {selectedTextureId && (
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-100/20 to-cyan-100/10 border-4 border-dashed border-blue-400/30 flex items-center justify-center z-10 pointer-events-none">
+            <div className="text-center bg-white/90 backdrop-blur-sm p-6 rounded-2xl shadow-2xl border border-blue-200">
+              <Move3D className="h-12 w-12 text-blue-600 mx-auto mb-3" />
+              <p className="font-semibold text-lg mb-1 text-blue-800">双击模型表面移动贴图</p>
+              <p className="text-sm text-blue-600">贴图将自动重新计算曲面贴合</p>
+            </div>
+          </div>
+        )}
+
+        {/* 返回按钮 */}
+        {/* <div className="absolute top-20 left-4 z-20">
           <Link href="/gallery">
-            <Button variant="outline" className="gap-2">
+            <Button 
+              variant="secondary" 
+              className="gap-2 bg-white/90 backdrop-blur-sm border border-gray-200/50 hover:bg-white shadow-2xl rounded-xl"
+            >
               <ArrowLeft className="h-4 w-4" />
               返回画廊
             </Button>
           </Link>
-          
-          <div className="flex gap-2">
-            {selectedTextureId && (
-              <Button 
-                onClick={handleDeselectTexture}
-                variant="outline"
-                className="gap-2 bg-blue-100 border-blue-300"
-                size="sm"
-              >
-                <AlertCircle className="h-4 w-4 text-blue-600" />
-                取消选中贴图
-              </Button>
-            )}
-            
-            {selectedImageUrl && (
-              <Button 
-                onClick={handleDeselectImage}
-                variant="outline"
-                className="gap-2 bg-amber-100 border-amber-300"
-                size="sm"
-              >
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-                取消选择图片
-              </Button>
-            )}
-            
-            {appliedTextures.length > 0 && (
-              <Button 
-                onClick={handleClearTextures}
-                variant="outline"
-                className="gap-2"
-                size="sm"
-              >
-                <RefreshCw className="h-4 w-4" />
-                清除贴图 ({appliedTextures.length})
-              </Button>
-            )}
-            
-            {currentModel?.path && (
-              <Button 
-                onClick={handleDownloadModel} 
-                disabled={isDownloading}
-                className="gap-2"
-                variant="outline"
-              >
-                <Download className="h-4 w-4" />
-                {isDownloading ? "下载中..." : "下载模型"}
-              </Button>
-            )}
-          </div>
-        </div>
-        
-        <h1 className="text-3xl font-semibold mb-6">
-          3D模型查看器 - 增强厚度智能曲面贴图
-        </h1>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-          {/* 控制面板 */}
-          <Card className="lg:col-span-2">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-                <Box className="h-5 w-5 text-primary" />
-                模型控制
-              </h3>
-              
-              {/* 模型选择器 */}
-              <div className="mb-6">
-                <label className="text-sm font-medium mb-2 block">选择模型</label>
-                <Select 
-                  value={selectedModelId} 
-                  onValueChange={setSelectedModelId}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="选择3D模型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODEL_CONFIG.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {/* 鼠标控制说明 */}
-              <div className="mb-6">
-                <MouseControlsInfo />
-              </div>
-              
-              {/* 模型信息 */}
-              {currentModel && (
-                <div className="p-4 bg-muted/50 rounded-lg mb-6">
-                  <h4 className="font-medium text-sm mb-2">模型信息</h4>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {currentModel.description}
-                  </p>
-                  {currentModel.path && (
-                    <div className="text-xs text-muted-foreground">
-                      <p>路径: {currentModel.path}</p>
-                      <StatusIndicator currentModel={currentModel} />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 选中状态提示 */}
-              {selectedImageUrl && (
-                <div className="p-4 bg-amber-50 rounded-lg mb-6">
-                  <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4 text-amber-600" />
-                    已选择图片
-                  </h4>
-                  <div className="flex items-center gap-2 mb-2">
-                    <img 
-                      src={selectedImageUrl} 
-                      alt="已选择图片"
-                      className="w-8 h-8 object-cover rounded"
-                    />
-                    <span className="text-sm flex-1">已选择图片，双击模型表面放置</span>
-                  </div>
-                  <div className="text-xs text-amber-700">
-                    <p>• 在3D模型表面双击即可放置贴图</p>
-                    <p>• 贴图将自动贴合模型曲面</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 选中贴图提示 */}
-              {selectedTextureId && (
-                <div className="p-4 bg-blue-50 rounded-lg mb-6">
-                  <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4 text-blue-600" />
-                    已选中贴图
-                  </h4>
-                  <div className="text-xs text-blue-700">
-                    <p>• 双击模型表面移动贴图到新位置</p>
-                    <p>• 贴图将自动重新计算曲面贴合</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 贴图控制面板 */}
-              {appliedTextures.length > 0 && (
-                <div className="p-4 bg-green-50 rounded-lg mb-6">
-                  <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4 text-green-600" />
-                    贴图控制
-                  </h4>
-                  
-                  {/* 贴图大小调节 */}
-                  <div className="mb-3">
-                    <label className="text-xs font-medium mb-1 block">贴图大小</label>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="0.5"
-                      step="0.05"
-                      value={textureSize}
-                      onChange={(e) => setTextureSize(parseFloat(e.target.value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>小</span>
-                      <span>{textureSize.toFixed(2)}</span>
-                      <span>大</span>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {appliedTextures.map((texture, index) => (
-                      <div 
-                        key={texture.id} 
-                        className={`flex items-center gap-2 text-xs p-2 rounded cursor-pointer ${
-                          selectedTextureId === texture.id ? 'bg-blue-100 border border-blue-300' : 'bg-gray-50 hover:bg-gray-100'
-                        }`}
-                        onClick={() => handleTextureSelect(texture.id)}
-                      >
-                        <img 
-                          src={texture.url} 
-                          alt={`贴图 ${index + 1}`}
-                          className="w-8 h-8 object-cover rounded"
-                        />
-                        <span className="flex-1 truncate">
-                          贴图 {index + 1}
-                          {selectedTextureId === texture.id && " (选中)"}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveTexture(texture.id);
-                          }}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* 应用大小调整按钮 */}
-                  {selectedTextureId && (
-                    <Button
-                      onClick={() => {
-                        toast({
-                          title: "贴图大小已更新",
-                          description: "贴图将重新计算曲面贴合",
-                        });
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                    >
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                      重新计算曲面贴合
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {/* 贴图信息 */}
-              <div className="p-4 bg-blue-50 rounded-lg mb-6">
-                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4 text-blue-600" />
-                  增强厚度智能曲面贴图功能
-                </h4>
-                <div className="text-xs text-blue-700 space-y-1">
-                  <p>• ✅ <strong>增强厚度：</strong>贴图厚度增加3倍，视觉效果更立体</p>
-                  <p>• ✅ <strong>增加表面距离：</strong>贴图与模型表面距离增加，避免穿透</p>
-                  <p>• ✅ <strong>智能曲面检测：</strong>使用插值法线精确计算曲面方向</p>
-                  <p>• ✅ <strong>动态贴合：</strong>移动贴图时自动重新计算曲面贴合</p>
-                  <p>• ✅ <strong>防穿透技术：</strong>自动调整位置避免 z-fighting</p>
-                  <p>• ✅ <strong>曲率适应：</strong>贴图自动适应模型表面曲率变化</p>
-                </div>
-              </div>
-
-              {/* 操作说明 */}
-              <div className="p-4 bg-primary/10 rounded-lg">
-                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                  <HelpCircle className="h-4 w-4" />
-                  增强厚度智能曲面贴图说明
-                </h4>
-                <ul className="text-xs text-muted-foreground space-y-1">
-                  <li>• ✅ <strong>增强厚度：</strong>贴图厚度从 0.05 增加到 0.15</li>
-                  <li>• ✅ <strong>增加表面距离：</strong>从 0.01 增加到 0.03-0.05</li>
-                  <li>• ✅ <strong>深度偏移优化：</strong>增加深度偏移因子防止穿透</li>
-                  <li>• 鼠标左键拖拽旋转视图</li>
-                  <li>• 鼠标滚轮缩放</li>
-                  <li>• 选择图片后双击模型表面放置新贴图</li>
-                  <li>• 点击已放置的贴图选中它</li>
-                  <li>• 选中贴图后双击模型表面移动贴图到新位置</li>
-                  <li>• 使用"清除贴图"按钮移除所有贴图</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* 3D预览区域 */}
-          <Card className="lg:col-span-3 border-2 border-primary/20 overflow-hidden">
-            <CardContent className="p-0">
-              <div className="h-[70vh] w-full relative">
-                {/* 只在选中历史图片且没有选中贴图时显示放置提示 */}
-                {selectedImageUrl && !selectedTextureId && (
-                  <div className="absolute inset-0 bg-amber-100/20 border-2 border-dashed border-amber-400 flex items-center justify-center z-10 pointer-events-none">
-                    <div className="text-center bg-background/80 p-4 rounded-lg">
-                      <ImageIcon className="h-8 w-8 text-amber-600 mx-auto mb-2" />
-                      <p className="font-medium">双击模型表面放置图片</p>
-                      <p className="text-sm text-muted-foreground">贴图将自动贴合曲面</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* 只在选中贴图时显示移动提示 */}
-                {selectedTextureId && (
-                  <div className="absolute inset-0 bg-blue-100/20 border-2 border-dashed border-blue-400 flex items-center justify-center z-10 pointer-events-none">
-                    <div className="text-center bg-background/80 p-4 rounded-lg">
-                      <ImageIcon className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                      <p className="font-medium">双击模型表面移动贴图</p>
-                      <p className="text-sm text-muted-foreground">贴图将自动重新计算曲面贴合</p>
-                    </div>
-                  </div>
-                )}
-                
-                {currentModel ? (
-                  <ModelScene 
-                    model={currentModel} 
-                    appliedTextures={appliedTextures}
-                    selectedTextureId={selectedTextureId}
-                    onTextureSelect={handleTextureSelect}
-                    onDoubleClick={handleModelDoubleClick}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-destructive">
-                    未找到模型配置
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* 历史图片区域 */}
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-10">
-          {/* 历史图片按钮 */}
-          <Button
-            onClick={toggleHistoryPanel}
-            className={`gap-2 transition-all duration-300 ${
-              isHistoryOpen ? "bg-primary text-primary-foreground" : "bg-secondary"
-            }`}
-            variant={isHistoryOpen ? "default" : "outline"}
-          >
-            <ImageIcon className={`h-4 w-4 transition-transform duration-300 ${
-              isHistoryOpen ? "rotate-90" : ""
-            }`} />
-            历史图片
-            <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${
-              isHistoryOpen ? "rotate-180" : ""
-            }`} />
-          </Button>
-          
-          {/* 历史图片面板 */}
-          <div
-            className={`mt-2 bg-card border rounded-lg shadow-lg transition-all duration-300 overflow-hidden ${
-              isHistoryOpen 
-                ? "max-h-40 opacity-100 translate-y-0" 
-                : "max-h-0 opacity-0 -translate-y-2"
-            }`}
-            style={{ width: "80vw", maxWidth: "600px" }}
-          >
-            <div className="p-4">
-              {isLoadingHistory ? (
-                <div className="flex justify-center items-center py-2">
-                  <RefreshCw className="h-4 w-4 animate-spin text-primary mr-2" />
-                  <p className="text-sm text-muted-foreground">加载历史图片中...</p>
-                </div>
-              ) : historyImages.length > 0 ? (
-                <>
-                  {/* 横向滚动的图片列表 */}
-                  <div 
-                    className="flex gap-3 overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 scrollbar-track-transparent"
-                    style={{ 
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: '#d1d5db transparent'
-                    }}
-                  >
-                    {historyImages.map((image) => (
-                      <HistoryImageCard 
-                        key={image.id} 
-                        image={image} 
-                        onSelect={handleImageSelect}
-                        imageData={loadedImages[image.id]}
-                      />
-                    ))}
-                  </div>
-                  
-                  {/* 选中的图片提示 */}
-                  {selectedImageUrl && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                          <CheckCircle className="h-3 w-3 text-primary" />
-                        </div>
-                        <span className="text-sm font-medium">已选择图片</span>
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <img 
-                          src={selectedImageUrl} 
-                          alt="Selected" 
-                          className="w-8 h-8 object-cover rounded"
-                        />
-                        <p className="text-xs text-muted-foreground truncate flex-1">
-                          双击模型表面放置（自动贴合曲面）
-                        </p>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 text-xs"
-                          onClick={handleDeselectImage}
-                        >
-                          取消
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-4 text-muted-foreground text-sm">
-                  暂无历史图片
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* 使用指南 */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            🎯 增强厚度智能曲面贴合技术
-          </h4>
-          <div className="text-sm text-blue-700 space-y-2">
-            <p><strong>核心改进：</strong></p>
-            <div className="ml-4">
-              <p>• ✅ <strong>厚度增强：</strong>贴图厚度从 0.05 增加到 0.15（增加3倍）</p>
-              <p>• ✅ <strong>表面距离：</strong>贴图与模型表面距离从 0.01 增加到 0.03-0.05</p>
-              <p>• ✅ <strong>深度偏移优化：</strong>增加深度偏移因子防止穿透</p>
-              <p>• ✅ <strong>几何体改进：</strong>使用立方体几何体替代平面，增加立体感</p>
-              <p>• ✅ <strong>防穿透技术：</strong>自动调整位置避免 z-fighting</p>
-            </div>
-            <p><strong>操作指南：</strong></p>
-            <div className="ml-4">
-              <p>1. <strong>选择图片：</strong>从历史图片中选择</p>
-              <p>2. <strong>精确放置：</strong>双击模型表面，贴图自动贴合曲面</p>
-              <p>3. <strong>智能移动：</strong>选中贴图后双击新位置，自动重新计算曲面贴合</p>
-              <p>4. <strong>厚度优化：</strong>贴图现在有更明显的厚度和立体感</p>
-              <p>5. <strong>深度控制：</strong>自动计算最佳深度避免穿透</p>
-            </div>
-            <p className="font-medium mt-2">🎉 现在贴图具有更好的厚度和立体感，视觉效果更佳！</p>
-          </div>
-        </div>
+        </div> */}
       </div>
+
+      {/* 全局样式 */}
+      <style jsx global>{`
+        .slider-gradient::-webkit-slider-thumb {
+          appearance: none;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+          cursor: pointer;
+          border: 2px solid white;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        
+        .slider-gradient::-moz-range-thumb {
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+          cursor: pointer;
+          border: 2px solid white;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+      `}</style>
     </div>
   );
 }
