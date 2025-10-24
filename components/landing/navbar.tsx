@@ -103,12 +103,10 @@ export default function Navbar() {
             </SignInButton>
           </SignedOut>
           <SignedIn>
-            <UserButton />
-            {/* <Link href="/generate">
-              <Button className="text-white">
-                Get Started
-              </Button> 
-            </Link> */}
+              <UserButton 
+              userProfileUrl="/profile" 
+              // userProfileMode="navigation" 
+              />
           </SignedIn>
         </div>
       </nav>
