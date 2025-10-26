@@ -1,90 +1,3 @@
-// // import { pgTable, serial, text, timestamp,  boolean, foreignKey} from 'drizzle-orm/pg-core';
-
-
-// // export const logosTable = pgTable('logos_table', {
-// //   id: serial('id').primaryKey(),
-// //   image_url: text('link').notNull(),
-// //   primary_color: text('primary_color').notNull(),
-// //   background_color: text('background_color').notNull(),
-// //   username: text('username').notNull(),
-// //   userId: text('user_id').notNull(),
-// //   createdAt: timestamp('created_at').notNull().defaultNow(),
-  
-// // });
-
-// // // 1. 点赞表（记录用户对 logo 的点赞）
-// // export const likesTable = pgTable("likes", {
-// //   id: text("id").primaryKey(), // 唯一 ID
-// //   logoId: text("logo_id")
-// //     .notNull()
-// //     .references(() => logosTable.id, { onDelete: "cascade" }), // 关联 logo
-// //   userId: text("user_id").notNull(), // 点赞用户（Clerk 用户 ID）
-// //   createdAt: timestamp("created_at").notNull().defaultNow(),
-// // });
-
-// // // 2. 收藏表（记录用户收藏的 logo）
-// // export const favoritesTable = pgTable("favorites", {
-// //   id: text("id").primaryKey(),
-// //   logoId: text("logo_id")
-// //     .notNull()
-// //     .references(() => logosTable.id, { onDelete: "cascade" }),
-// //   userId: text("user_id").notNull(), // 收藏用户
-// //   createdAt: timestamp("created_at").notNull().defaultNow(),
-// // });
-
-// // export type InsertLogo = typeof logosTable.$inferInsert;
-// // export type SelectLogo = typeof logosTable.$inferSelect;
-
-// import { pgTable, serial, text, varchar, timestamp, integer, uniqueIndex, index, boolean, jsonb } from 'drizzle-orm/pg-core';
-// import { relations } from 'drizzle-orm';
-
-// export const logosTable = pgTable('logos_table', {
-//   id: serial('id').primaryKey(),
-//   image_url: text("image_url").notNull(),
-//   primary_color: text('primary_color').notNull(),
-//   background_color: text('background_color').notNull(),
-//   username: text('username').notNull(),
-//   userId: text('user_id').notNull(),
-//   createdAt: timestamp('created_at').notNull().defaultNow(),
-//   style: text('style'),
-//   companyName: text('company_name'),
-//   size: text('size'),
-//   // model: validatedData.model, // 记录使用的模型
-//   // text_accuracy: 0, // 可以后期人工评估添加
-//   // style_match: 0,   // 可以后期人工评估添加
-// });
-
-// // 点赞表
-// export const likesTable = pgTable('logo_likes', {
-//   id: serial('id').primaryKey(),
-//   logoId: integer('logo_id')
-//     .notNull()
-//     .references(() => logosTable.id, { onDelete: 'cascade' }),
-//   userId: text('user_id')
-//     .notNull(),
-//   createdAt: timestamp('created_at').notNull().defaultNow(),
-// }, (table) => ({
-//   uniqueLike: uniqueIndex('logo_likes_unique').on(table.logoId, table.userId),
-//   logoIdIdx: index('logo_likes_logo_id_idx').on(table.logoId),
-// }));
-
-// // 关系定义
-// export const logoRelations = relations(logosTable, ({ many }) => ({
-//   likes: many(likesTable),
-// }));
-
-// export const likeRelations = relations(likesTable, ({ one }) => ({
-//   logo: one(logosTable, {
-//     fields: [likesTable.logoId],
-//     references: [logosTable.id],
-//   }),
-// }));
-
-// export type InsertLogo = typeof logosTable.$inferInsert;
-// export type SelectLogo = typeof logosTable.$inferSelect;
-// export type InsertLike = typeof likesTable.$inferInsert;
-// export type SelectLike = typeof likesTable.$inferSelect;
-
 // db/schema.ts
 import { pgTable, serial, text, varchar, timestamp, integer, uniqueIndex, index, boolean, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -209,6 +122,46 @@ export const bookmarkRelations = relations(bookmarksTable, ({ one }) => ({
   }),
 }));
 
+// 购物车表 - 只存储配置信息
+export const shoppingCartsTable = pgTable('shopping_carts', {
+  id: serial('id').primaryKey(),
+  clerkUserId: varchar('clerk_user_id', { length: 255 }).notNull(),
+  items: jsonb('items').notNull().default('[]'), // 存储购物车商品配置
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  userIdx: uniqueIndex('shopping_carts_user_unique').on(table.clerkUserId),
+}));
+
+// 3D模型产品配置表
+export const modelProductsTable = pgTable('model_products', {
+  id: serial('id').primaryKey(),
+  modelId: varchar('model_id', { length: 255 }).unique().notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  basePrice: integer('base_price').notNull().default(9999), // 基础价格（分）
+  texturePrice: integer('texture_price').notNull().default(999), // 每个贴图的价格（分）
+  description: text('description'),
+  thumbnailUrl: text('thumbnail_url'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 3D模型订单表
+export const modelOrdersTable = pgTable('model_orders', {
+  id: serial('id').primaryKey(),
+  orderId: varchar('order_id', { length: 100 }).unique().notNull(),
+  clerkUserId: varchar('clerk_user_id', { length: 255 }).notNull(),
+  items: jsonb('items').notNull(), // 存储订单商品配置
+  totalAmount: integer('total_amount').notNull(), // 单位：分
+  itemCount: integer('item_count').notNull(),
+  status: varchar('status', { length: 50 }).default('pending'),
+  paymentMethod: varchar('payment_method', { length: 50 }),
+  paymentId: varchar('payment_id', { length: 255 }),
+  paidAt: timestamp('paid_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  userIdx: index('model_orders_user_idx').on(table.clerkUserId),
+}));
 
 // // 订阅计划表
 // export const subscriptionPlansTable = pgTable('subscription_plans', {
@@ -280,9 +233,39 @@ export const creditTransactionRelations = relations(creditTransactionsTable, ({ 
   }),
 }));
 
+export const shoppingCartRelations = relations(shoppingCartsTable, ({ one }) => ({
+  user: one(userProfilesTable, {
+    fields: [shoppingCartsTable.clerkUserId],
+    references: [userProfilesTable.clerkUserId],
+  }),
+}));
 
+export const modelOrderRelations = relations(modelOrdersTable, ({ one }) => ({
+  user: one(userProfilesTable, {
+    fields: [modelOrdersTable.clerkUserId],
+    references: [userProfilesTable.clerkUserId],
+  }),
+}));
+
+export interface CartItem {
+  id: string;
+  modelId: string;
+  modelName: string;
+  textureCount: number;
+  quantity: number;
+  unitPrice: number; // 单位：分
+  totalPrice: number; // 单位：分
+  thumbnail?: string;
+  createdAt: Date;
+}
 
 // 类型推断
+export type InsertShoppingCart = typeof shoppingCartsTable.$inferInsert;
+export type SelectShoppingCart = typeof shoppingCartsTable.$inferSelect;
+export type InsertModelProduct = typeof modelProductsTable.$inferInsert;
+export type SelectModelProduct = typeof modelProductsTable.$inferSelect;
+export type InsertModelOrder = typeof modelOrdersTable.$inferInsert;
+export type SelectModelOrder = typeof modelOrdersTable.$inferSelect;
 export type InsertLogo = typeof logosTable.$inferInsert;
 export type SelectLogo = typeof logosTable.$inferSelect;
 export type InsertLike = typeof likesTable.$inferInsert;
